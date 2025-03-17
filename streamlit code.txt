@@ -1,0 +1,59 @@
+import streamlit as st
+import numpy as np
+from tensorflow.keras.models import load_model
+from tensorflow.keras.utils import load_img, img_to_array
+import os
+
+# Load the trained model
+MODEL_PATH = r"D:\prithivi main project\multi_class_DR_model.h5"  # Raw string
+
+# Check if model file exists
+if not os.path.exists(MODEL_PATH):
+    st.error(f"Model file not found: {MODEL_PATH}")
+    st.stop()
+
+model = load_model(MODEL_PATH)
+
+# Define class labels
+CLASS_NAMES = ['No_DR', 'Mild', 'Moderate', 'Severe', 'Proliferative_DR']
+
+# Streamlit app title and description
+st.title("🩺 Diabetic Retinopathy Classification")
+st.write("Upload an eye fundus image to classify its severity.")
+
+# File uploader for image upload
+uploaded_file = st.file_uploader("Choose an image...", type=["jpg", "jpeg", "png"])
+
+if uploaded_file is not None:
+    # Display the uploaded image
+    st.image(uploaded_file, caption="Uploaded Image", use_column_width=True)
+    st.write("🔄 Processing the image...")
+
+    try:
+        # Preprocess the uploaded image
+        img = load_img(uploaded_file, target_size=(150, 150))  # Resize image
+        img_array = img_to_array(img) / 255.0  # Normalize pixel values
+        img_array = np.expand_dims(img_array, axis=0)  # Add batch dimension
+
+        # Make a prediction
+        predictions = model.predict(img_array)
+
+        if predictions.shape[1] != len(CLASS_NAMES):
+            st.error("Mismatch between model output and class labels. Please check the model.")
+            st.stop()
+
+        predicted_class_idx = np.argmax(predictions)  # Get class index with highest probability
+        predicted_class = CLASS_NAMES[predicted_class_idx]
+        confidence = float(predictions[0][predicted_class_idx])  # Confidence score
+
+        # Display the prediction results
+        st.success(f"**Predicted Class:** {predicted_class}")
+        st.write(f"**Confidence:** {confidence:.2%}")
+
+        # Display full probability scores for each class
+        st.write("### Class Probabilities:")
+        for i, class_name in enumerate(CLASS_NAMES):
+            st.write(f"**{class_name}:** {float(predictions[0][i]):.2%}")
+
+    except Exception as e:
+        st.error(f"An error occurred while processing the image: {e}")
