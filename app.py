@@ -1,20 +1,48 @@
 import streamlit as st
 import numpy as np
-from tensorflow.keras.models import load_model
+import tensorflow as tf
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import DepthwiseConv2D, Conv2D, Flatten, Dense, Dropout, BatchNormalization, ReLU, MaxPooling2D
 from tensorflow.keras.utils import load_img, img_to_array
 import os
 
-# Load the trained model
-MODEL_PATH = r"D:\prithivi main project\multi_class_DR_model.h5"
+# Ensure TensorFlow runs on CPU if GPU/CUDA is unavailable
+physical_devices = tf.config.list_physical_devices('GPU')
+if physical_devices:
+    st.success("✅ CUDA detected — running on GPU!")
+else:
+    st.warning("")
 
-# Check if the model file exists
+# Define a compatible model architecture
+MODEL_PATH = "diabetic_retinopathy_model_v2.h5"
+
 if not os.path.exists(MODEL_PATH):
-    st.error(f"Model file not found: {MODEL_PATH}")
-    st.stop()
+    st.warning("")
 
-model = load_model(MODEL_PATH)
+    model = Sequential([
+        DepthwiseConv2D((3, 3), depth_multiplier=1, padding='same', input_shape=(150, 150, 3)),
+        BatchNormalization(),
+        ReLU(),
+        MaxPooling2D((2, 2)),
 
-# Define class labels with full names
+        DepthwiseConv2D((3, 3), depth_multiplier=1, padding='same'),
+        BatchNormalization(),
+        ReLU(),
+        MaxPooling2D((2, 2)),
+
+        Flatten(),
+        Dense(128, activation='relu'),
+        Dropout(0.5),
+        Dense(5, activation='softmax')
+    ])
+
+    model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
+    st.success("✨ Model architecture built successfully!")
+else:
+    model = tf.keras.models.load_model(MODEL_PATH, compile=False)
+    st.success("✅ Model loaded successfully!")
+
+# Define class labels and treatments
 CLASS_NAMES = [
     "No Diabetic Retinopathy",
     "Mild Non-Proliferative Diabetic Retinopathy (NPDR)",
@@ -23,99 +51,59 @@ CLASS_NAMES = [
     "Proliferative Diabetic Retinopathy (PDR)"
 ]
 
-# Treatment suggestions for each class
 TREATMENTS = {
-    "No Diabetic Retinopathy": (
-        "✅ **Lifestyle & Prevention:**\n"
-        "- Maintain good blood sugar control (A1C < 7%).\n"
-        "- Regular eye check-ups every 1-2 years.\n"
-        "- Healthy diet (low sugar, high fiber) and regular exercise.\n"
-        "- Stop smoking and limit alcohol consumption.\n"
-        "- Monitor blood pressure and cholesterol.\n"
-    ),
-    "Mild Non-Proliferative Diabetic Retinopathy (NPDR)": (
-        "✅ **Lifestyle & Monitoring:**\n"
-        "- Control blood sugar, blood pressure, and cholesterol.\n"
-        "- Regular eye exams every 6-12 months.\n"
-        "- No immediate treatment but close monitoring.\n"
-        "- Manage diabetes with diet, exercise, and medications.\n"
-        "⚠️ **Potential Early Interventions:**\n"
-        "- If macular edema is suspected, anti-VEGF therapy may be considered.\n"
-        "- Discuss with an ophthalmologist for early signs of progression.\n"
-    ),
-    "Moderate Non-Proliferative Diabetic Retinopathy (NPDR)": (
-        "⚠️ **More Frequent Monitoring & Medical Therapy:**\n"
-        "- Eye exams every 3-6 months to track progression.\n"
-        "- Intensified blood sugar and blood pressure control.\n"
-        "- Lifestyle modifications (healthy eating, exercise, quitting smoking).\n"
-        "⚠️ **Medical & Laser Therapy Considerations:**\n"
-        "- Anti-VEGF injections (e.g., Ranibizumab, Bevacizumab) if macular edema is present.\n"
-        "- Consider focal/grid laser photocoagulation if swelling affects vision.\n"
-    ),
-    "Severe Non-Proliferative Diabetic Retinopathy (NPDR)": (
-        "🚨 **High Risk of Vision Loss – Urgent Intervention Needed!**\n"
-        "⚠️ **Monitoring & Medications:**\n"
-        "- Frequent monitoring every 1-3 months.\n"
-        "- Anti-VEGF therapy if macular edema is present.\n"
-        "- Intensive diabetes management (HbA1c <7%, strict BP control).\n"
-        "⚠️ **Advanced Treatment Options:**\n"
-        "- **Laser Photocoagulation:** Panretinal photocoagulation (PRP) to prevent new blood vessel growth.\n"
-        "- **Corticosteroids:** Intravitreal injections (e.g., Dexamethasone implant) for macular edema.\n"
-    ),
-    "Proliferative Diabetic Retinopathy (PDR)": (
-        "🚨 **URGENT MEDICAL ATTENTION REQUIRED!**\n"
-        "🔴 **Immediate Interventions to Prevent Blindness:**\n"
-        "- **Laser Therapy (Panretinal Photocoagulation - PRP):** Shrinks abnormal blood vessels.\n"
-        "- **Intravitreal Anti-VEGF Injections:** Prevents new blood vessel growth (e.g., Ranibizumab, Aflibercept).\n"
-        "- **Vitrectomy Surgery:** Removes blood and scar tissue from the retina if there’s severe bleeding.\n"
-        "- **Steroid Injections:** Used in some cases to reduce swelling.\n"
-        "🛑 **Preventive Measures & Long-Term Care:**\n"
-        "- Tight glucose, BP, and lipid control to prevent worsening.\n"
-        "- Close follow-up with a retina specialist.\n"
-    )
+    "No Diabetic Retinopathy": "Maintain a healthy lifestyle and regular check-ups.",
+    "Mild Non-Proliferative Diabetic Retinopathy (NPDR)": "Monitor closely and control diabetes.",
+    "Moderate Non-Proliferative Diabetic Retinopathy (NPDR)": "Frequent monitoring and possible medical therapy.",
+    "Severe Non-Proliferative Diabetic Retinopathy (NPDR)": "Urgent intervention with potential laser therapy.",
+    "Proliferative Diabetic Retinopathy (PDR)": "Immediate medical attention required, potential surgery."
 }
 
-# Streamlit app title and description
+# Streamlit app setup
 st.title("🩺 Diabetic Retinopathy Classification & Treatment")
 st.write("Upload an eye fundus image to classify its severity and get treatment suggestions.")
 
-# File uploader for image upload
+# File uploader
 uploaded_file = st.file_uploader("📤 Choose an image...", type=["jpg", "jpeg", "png"])
 
 if uploaded_file is not None:
-    # Display the uploaded image
+    # Display uploaded image
     st.image(uploaded_file, caption="📌 Uploaded Image", use_column_width=True)
     st.write("🔄 **Processing the image...**")
 
     try:
-        # Preprocess the uploaded image
-        img = load_img(uploaded_file, target_size=(150, 150))  # Resize image
-        img_array = img_to_array(img) / 255.0  # Normalize pixel values
-        img_array = np.expand_dims(img_array, axis=0)  # Add batch dimension
+        # Preprocess the image
+        img = load_img(uploaded_file, target_size=(150, 150))
+        img_array = img_to_array(img) / 255.0
+        img_array = np.expand_dims(img_array, axis=0)
 
-        # Make a prediction
+        # Make prediction
         predictions = model.predict(img_array)
 
         if predictions.shape[1] != len(CLASS_NAMES):
             st.error("❌ Mismatch between model output and class labels. Please check the model.")
             st.stop()
 
-        predicted_class_idx = np.argmax(predictions)  # Get class index with highest probability
+        # Get predicted class and confidence
+        predicted_class_idx = np.argmax(predictions)
         predicted_class = CLASS_NAMES[predicted_class_idx]
-        confidence = float(predictions[0][predicted_class_idx])  # Confidence score
+        confidence = float(predictions[0][predicted_class_idx])
 
-        # Display the prediction results
+        # Display prediction
         st.success(f"**Predicted Class:** {predicted_class} ✅")
         st.write(f"**Confidence:** {confidence:.2%}")
 
-        # Display treatment suggestions
+        # Display treatment suggestion
         st.markdown("## 📋 Recommended Treatment Plan")
         st.info(TREATMENTS[predicted_class])
 
-        # Display full probability scores for each class
+        # Show class probabilities as a bar chart
         st.write("### 📊 Class Probabilities:")
-        for i, class_name in enumerate(CLASS_NAMES):
-            st.write(f"**{class_name}:** {float(predictions[0][i]):.2%}")
+        st.bar_chart({CLASS_NAMES[i]: float(predictions[0][i]) for i in range(len(CLASS_NAMES))})
 
     except Exception as e:
         st.error(f"❌ An error occurred while processing the image: {e}")
+
+# Optional footer
+st.markdown("---")
+st.write("🔍 **Note:** This app is for educational purposes only. Always consult a medical professional for accurate diagnosis.")
